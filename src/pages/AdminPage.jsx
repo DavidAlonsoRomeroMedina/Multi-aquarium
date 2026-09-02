@@ -1,0 +1,366 @@
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+} from 'firebase/firestore'
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useEffect, useMemo, useState } from 'react'
+import GlassCard from '../components/GlassCard'
+import { INITIAL_MEMBERS } from '../constants/members'
+import { auth, db, isFirebaseConfigured } from '../firebase'
+
+const ADMIN_SESSION_KEY = 'multi-aquarium-admin'
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || ''
+const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || ''
+const USE_FIREBASE_AUTH = import.meta.env.VITE_USE_FIREBASE_AUTH === 'true'
+
+function formatDate(value) {
+  if (!value?.toDate) return 'Hace un momento'
+  return value.toDate().toLocaleString('es-ES', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  })
+}
+
+export default function AdminPage() {
+  const [unlocked, setUnlocked] = useState(
+    () => sessionStorage.getItem(ADMIN_SESSION_KEY) === '1',
+  )
+  const [password, setPassword] = useState('')
+  const [authError, setAuthError] = useState('')
+  const [tab, setTab] = useState('letters')
+  const [letters, setLetters] = useState([])
+  const [members, setMembers] = useState([])
+  const [newMember, setNewMember] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState('')
+
+  useEffect(() => {
+    if (!unlocked || !db) return undefined
+
+    const lettersUnsub = onSnapshot(
+      query(collection(db, 'letters'), orderBy('createdAt', 'desc')),
+      (snapshot) => {
+        setLetters(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })))
+      },
+    )
+
+    const membersUnsub = onSnapshot(
+      query(collection(db, 'members'), orderBy('name')),
+      (snapshot) => {
+        setMembers(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })))
+      },
+    )
+
+    return () => {
+      lettersUnsub()
+      membersUnsub()
+    }
+  }, [unlocked])
+
+  const missingConfig = !isFirebaseConfigured || !db
+
+  async function handleUnlock(event) {
+    event.preventDefault()
+    setAuthError('')
+
+    try {
+      if (USE_FIREBASE_AUTH) {
+        if (!auth || !ADMIN_EMAIL) {
+          throw new Error('Firebase Auth no está configurado.')
+        }
+        await signInWithEmailAndPassword(auth, ADMIN_EMAIL, password)
+      } else if (!ADMIN_PASSWORD || password !== ADMIN_PASSWORD) {
+        setAuthError('La contraseña no abre esta esclusa.')
+        return
+      }
+
+      sessionStorage.setItem(ADMIN_SESSION_KEY, '1')
+      setUnlocked(true)
+      setPassword('')
+    } catch {
+      setAuthError('No se pudo entrar al panel. Revisa las credenciales.')
+    }
+  }
+
+  async function handleLogout() {
+    sessionStorage.removeItem(ADMIN_SESSION_KEY)
+    setUnlocked(false)
+    if (USE_FIREBASE_AUTH && auth) {
+      await signOut(auth)
+    }
+  }
+
+  async function addMember(event) {
+    event.preventDefault()
+    const name = newMember.trim()
+    if (!name || !db) return
+
+    setBusy(true)
+    setNotice('')
+    try {
+      await addDoc(collection(db, 'members'), {
+        name,
+        createdAt: serverTimestamp(),
+      })
+      setNewMember('')
+    } catch (error) {
+      console.error(error)
+      setNotice('No se pudo agregar el integrante.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function removeMember(id) {
+    if (!db) return
+    setBusy(true)
+    try {
+      await deleteDoc(doc(db, 'members', id))
+    } catch (error) {
+      console.error(error)
+      setNotice('No se pudo eliminar el integrante.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function seedMembers() {
+    if (!db) return
+    setBusy(true)
+    setNotice('')
+    try {
+      const existing = new Set(members.map((member) => member.name.toLowerCase()))
+      const missing = INITIAL_MEMBERS.filter(
+        (name) => !existing.has(name.toLowerCase()),
+      )
+
+      await Promise.all(
+        missing.map((name) =>
+          addDoc(collection(db, 'members'), {
+            name,
+            createdAt: serverTimestamp(),
+          }),
+        ),
+      )
+      setNotice(
+        missing.length
+          ? `Se agregaron ${missing.length} integrantes iniciales.`
+          : 'La lista inicial ya estaba cargada.',
+      )
+    } catch (error) {
+      console.error(error)
+      setNotice('No se pudo cargar la lista inicial.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function removeLetter(id) {
+    if (!db) return
+    setBusy(true)
+    try {
+      await deleteDoc(doc(db, 'letters', id))
+    } catch (error) {
+      console.error(error)
+      setNotice('No se pudo archivar la carta.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const tabs = useMemo(
+    () => [
+      { id: 'letters', label: 'Buzón de Cartas' },
+      { id: 'members', label: 'Gestión de Integrantes' },
+    ],
+    [],
+  )
+
+  if (!unlocked) {
+    return (
+      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-lg items-center px-4 py-16">
+        <GlassCard className="w-full">
+          <p className="text-xs font-semibold tracking-[0.28em] text-cyan-200/80 uppercase">
+            Zona oculta
+          </p>
+          <h1 className="font-display mt-2 text-4xl text-cyan-50">Panel del Acuario</h1>
+          <p className="mt-2 text-sm text-sky-100/75">
+            Solo quienes conocen la clave pueden ver las cartas y cuidar a los integrantes.
+          </p>
+          <form className="mt-6 space-y-4" onSubmit={handleUnlock}>
+            <input
+              type="password"
+              className="glass-input"
+              placeholder="Contraseña de administrador"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+            {authError ? <p className="text-sm text-rose-200">{authError}</p> : null}
+            <button
+              type="submit"
+              className="w-full rounded-2xl bg-gradient-to-r from-blue-800 to-cyan-500 px-5 py-3 font-semibold text-white"
+            >
+              Entrar
+            </button>
+          </form>
+        </GlassCard>
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative z-10 mx-auto min-h-screen w-full max-w-6xl px-4 py-10">
+      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold tracking-[0.28em] text-cyan-200/80 uppercase">
+            Administrador
+          </p>
+          <h1 className="font-display text-4xl text-cyan-50">Panel secreto del acuario</h1>
+        </div>
+        <button
+          type="button"
+          className="rounded-full border border-cyan-100/20 bg-white/5 px-4 py-2 text-sm text-cyan-50"
+          onClick={handleLogout}
+        >
+          Cerrar sesión
+        </button>
+      </div>
+
+      {missingConfig ? (
+        <p className="mb-4 rounded-2xl border border-amber-200/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+          Firebase no está configurado. Completa el archivo .env para usar el panel.
+        </p>
+      ) : null}
+
+      <div className="mb-6 flex flex-wrap gap-2">
+        {tabs.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`rounded-full px-4 py-2 text-sm font-semibold ${
+              tab === item.id
+                ? 'bg-cyan-300/25 text-white'
+                : 'bg-white/5 text-cyan-100/80 hover:bg-white/10'
+            }`}
+            onClick={() => setTab(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {notice ? <p className="mb-4 text-sm text-cyan-100/80">{notice}</p> : null}
+
+      <AnimatePresence mode="wait">
+        {tab === 'letters' ? (
+          <motion.section
+            key="letters"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+          >
+            {letters.length === 0 ? (
+              <GlassCard>
+                <p className="text-sky-100/75">Todavía no hay cartas en el buzón.</p>
+              </GlassCard>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {letters.map((letter) => (
+                  <GlassCard key={letter.id} className="flex flex-col gap-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs tracking-wide text-cyan-200/70 uppercase">
+                          {formatDate(letter.createdAt)}
+                        </p>
+                        <h2 className="font-display text-2xl text-cyan-50">
+                          Para {letter.recipientName}
+                        </h2>
+                        <p className="text-sm text-sky-100/80">De {letter.sender}</p>
+                      </div>
+                      <button
+                        type="button"
+                        className="text-xs text-rose-200/80 hover:text-rose-100"
+                        onClick={() => removeLetter(letter.id)}
+                        disabled={busy}
+                      >
+                        Archivar
+                      </button>
+                    </div>
+                    <p className="whitespace-pre-wrap text-sky-50/90">{letter.message}</p>
+                    {letter.imageUrl ? (
+                      <img
+                        src={letter.imageUrl}
+                        alt={`Adjunto de ${letter.sender}`}
+                        className="max-h-64 rounded-2xl object-cover"
+                      />
+                    ) : null}
+                  </GlassCard>
+                ))}
+              </div>
+            )}
+          </motion.section>
+        ) : (
+          <motion.section
+            key="members"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+          >
+            <GlassCard className="mb-4">
+              <form className="flex flex-col gap-3 sm:flex-row" onSubmit={addMember}>
+                <input
+                  className="glass-input"
+                  placeholder="Nombre del integrante"
+                  value={newMember}
+                  onChange={(event) => setNewMember(event.target.value)}
+                  disabled={busy}
+                />
+                <button
+                  type="submit"
+                  className="rounded-2xl bg-gradient-to-r from-blue-800 to-cyan-500 px-5 py-3 font-semibold whitespace-nowrap text-white"
+                  disabled={busy}
+                >
+                  Agregar
+                </button>
+              </form>
+              <button
+                type="button"
+                className="mt-4 text-sm text-cyan-200 underline-offset-4 hover:underline"
+                onClick={seedMembers}
+                disabled={busy}
+              >
+                Cargar lista inicial de 19 integrantes
+              </button>
+            </GlassCard>
+
+            <div className="space-y-2">
+              {members.map((member) => (
+                <div
+                  key={member.id}
+                  className="glass flex items-center justify-between rounded-2xl px-4 py-3"
+                >
+                  <span className="font-medium text-cyan-50">{member.name}</span>
+                  <button
+                    type="button"
+                    className="rounded-full bg-rose-400/15 px-3 py-1 text-sm text-rose-100 hover:bg-rose-400/25"
+                    onClick={() => removeMember(member.id)}
+                    disabled={busy}
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              ))}
+            </div>
+          </motion.section>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
