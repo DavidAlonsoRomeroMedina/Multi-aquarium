@@ -1,11 +1,12 @@
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useMemo, useState } from 'react'
-import { db, isFirebaseConfigured, storage } from '../firebase'
+import { db, isFirebaseConfigured } from '../firebase'
+import { resolveLetterImage } from '../lib/imageUpload'
 import GlassCard from './GlassCard'
+import MemberPicker from './MemberPicker'
 
-const MAX_IMAGE_MB = 5
+const MAX_IMAGE_MB = 10
 
 export default function LetterForm({ members, onSent }) {
   const [sender, setSender] = useState('')
@@ -58,14 +59,7 @@ export default function LetterForm({ members, onSent }) {
       let imageUrl = null
 
       if (imageFile) {
-        if (!storage) {
-          throw new Error('Firebase Storage no está disponible.')
-        }
-
-        const safeName = imageFile.name.replace(/[^\w.\-]+/g, '_')
-        const fileRef = ref(storage, `letters/${Date.now()}_${safeName}`)
-        await uploadBytes(fileRef, imageFile)
-        imageUrl = await getDownloadURL(fileRef)
+        imageUrl = await resolveLetterImage(imageFile)
       }
 
       await addDoc(collection(db, 'letters'), {
@@ -86,14 +80,14 @@ export default function LetterForm({ members, onSent }) {
       onSent?.()
     } catch (err) {
       console.error(err)
-      setError('No se pudo enviar la carta. Inténtalo de nuevo en un momento.')
+      setError(err.message || 'No se pudo enviar la carta. Inténtalo de nuevo en un momento.')
     } finally {
       setSending(false)
     }
   }
 
   return (
-    <GlassCard className="w-full max-w-xl">
+    <GlassCard className="w-full max-w-4xl">
       <form className="space-y-5" onSubmit={handleSubmit}>
         <div>
           <label className="mb-2 block text-sm font-semibold text-cyan-100" htmlFor="sender">
@@ -120,25 +114,18 @@ export default function LetterForm({ members, onSent }) {
           </label>
         </div>
 
-        <div>
-          <label className="mb-2 block text-sm font-semibold text-cyan-100" htmlFor="recipient">
-            Destinatario
-          </label>
-          <select
-            id="recipient"
-            className="glass-input"
-            value={recipientId}
-            onChange={(event) => setRecipientId(event.target.value)}
-            disabled={sending}
-          >
-            <option value="">Elige a un integrante del acuario…</option>
-            {members.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.name}
-              </option>
-            ))}
-          </select>
-        </div>
+        <MemberPicker
+          members={members}
+          selectedId={recipientId}
+          onSelect={setRecipientId}
+          disabled={sending}
+        />
+
+        {selectedMember ? (
+          <p className="rounded-xl border border-cyan-200/25 bg-cyan-300/10 px-4 py-2 text-sm text-cyan-50">
+            Carta para <span className="font-semibold">{selectedMember.name}</span>
+          </p>
+        ) : null}
 
         <div>
           <label className="mb-2 block text-sm font-semibold text-cyan-100" htmlFor="message">
@@ -167,13 +154,16 @@ export default function LetterForm({ members, onSent }) {
             onChange={(event) => setImageFile(event.target.files?.[0] ?? null)}
             disabled={sending}
           />
+          <p className="mt-2 text-xs text-sky-200/65">
+            Menos de 1&nbsp;MB se guarda en Base64. Imágenes más grandes se suben a Imgur (gratis).
+          </p>
           <AnimatePresence>
             {previewUrl ? (
               <motion.img
                 key={previewUrl}
                 src={previewUrl}
                 alt="Vista previa"
-                className="mt-3 max-h-40 rounded-2xl border border-cyan-100/20 object-cover"
+                className="mt-3 max-h-40 w-full rounded-2xl border border-cyan-100/20 object-cover"
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
@@ -190,7 +180,7 @@ export default function LetterForm({ members, onSent }) {
 
         <motion.button
           type="submit"
-          className="w-full rounded-2xl bg-gradient-to-r from-blue-700 via-blue-600 to-cyan-500 px-5 py-3 font-semibold text-white shadow-[0_10px_30px_rgba(8,145,178,0.35)] disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full rounded-2xl bg-gradient-to-r from-blue-700 via-sky-500 to-cyan-300 px-5 py-3 font-semibold text-slate-950 shadow-[0_10px_30px_rgba(56,189,248,0.4)] disabled:cursor-not-allowed disabled:opacity-60"
           whileHover={{ scale: sending ? 1 : 1.015 }}
           whileTap={{ scale: sending ? 1 : 0.98 }}
           disabled={sending}

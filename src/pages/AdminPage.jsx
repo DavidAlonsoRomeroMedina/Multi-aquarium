@@ -1,5 +1,4 @@
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -7,13 +6,19 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
 } from 'firebase/firestore'
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useMemo, useState } from 'react'
 import GlassCard from '../components/GlassCard'
-import { INITIAL_MEMBERS } from '../constants/members'
+import { withMemberImages } from '../constants/members'
 import { auth, db, isFirebaseConfigured } from '../firebase'
+import {
+  memberDocId,
+  syncMembersCollection,
+  uniqueMembersByName,
+} from '../lib/membersSync'
 
 const ADMIN_SESSION_KEY = 'multi-aquarium-admin'
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || ''
@@ -54,7 +59,13 @@ export default function AdminPage() {
     const membersUnsub = onSnapshot(
       query(collection(db, 'members'), orderBy('name')),
       (snapshot) => {
-        setMembers(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })))
+        setMembers(
+          uniqueMembersByName(
+            withMemberImages(
+              snapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
+            ),
+          ),
+        )
       },
     )
 
@@ -105,10 +116,14 @@ export default function AdminPage() {
     setBusy(true)
     setNotice('')
     try {
-      await addDoc(collection(db, 'members'), {
-        name,
-        createdAt: serverTimestamp(),
-      })
+      await setDoc(
+        doc(db, 'members', memberDocId(name)),
+        {
+          name,
+          createdAt: serverTimestamp(),
+        },
+        { merge: true },
+      )
       setNewMember('')
     } catch (error) {
       console.error(error)
@@ -136,24 +151,8 @@ export default function AdminPage() {
     setBusy(true)
     setNotice('')
     try {
-      const existing = new Set(members.map((member) => member.name.toLowerCase()))
-      const missing = INITIAL_MEMBERS.filter(
-        (name) => !existing.has(name.toLowerCase()),
-      )
-
-      await Promise.all(
-        missing.map((name) =>
-          addDoc(collection(db, 'members'), {
-            name,
-            createdAt: serverTimestamp(),
-          }),
-        ),
-      )
-      setNotice(
-        missing.length
-          ? `Se agregaron ${missing.length} integrantes iniciales.`
-          : 'La lista inicial ya estaba cargada.',
-      )
+      await syncMembersCollection()
+      setNotice('Lista sincronizada: 19 integrantes únicos (duplicados eliminados).')
     } catch (error) {
       console.error(error)
       setNotice('No se pudo cargar la lista inicial.')
@@ -298,7 +297,7 @@ export default function AdminPage() {
                       <img
                         src={letter.imageUrl}
                         alt={`Adjunto de ${letter.sender}`}
-                        className="max-h-64 rounded-2xl object-cover"
+                        className="max-h-64 w-full rounded-2xl object-cover object-center"
                       />
                     ) : null}
                   </GlassCard>
@@ -336,7 +335,7 @@ export default function AdminPage() {
                 onClick={seedMembers}
                 disabled={busy}
               >
-                Cargar lista inicial de 19 integrantes
+                Sincronizar lista (19 únicos, sin duplicados)
               </button>
             </GlassCard>
 
@@ -346,7 +345,22 @@ export default function AdminPage() {
                   key={member.id}
                   className="glass flex items-center justify-between rounded-2xl px-4 py-3"
                 >
-                  <span className="font-medium text-cyan-50">{member.name}</span>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="avatar-ring h-11 w-11 overflow-hidden rounded-full">
+                      {member.image ? (
+                        <img
+                          src={member.image}
+                          alt={member.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="flex h-full w-full items-center justify-center bg-cyan-900/50 text-sm">
+                          {member.name.slice(0, 1)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="truncate font-medium text-cyan-50">{member.name}</span>
+                  </div>
                   <button
                     type="button"
                     className="rounded-full bg-rose-400/15 px-3 py-1 text-sm text-rose-100 hover:bg-rose-400/25"

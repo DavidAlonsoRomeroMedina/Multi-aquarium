@@ -11,7 +11,7 @@ export default function SiteHeader() {
         Acuario Mágico
       </motion.p>
       <motion.h1
-        className="font-display text-5xl font-semibold text-cyan-50 drop-shadow-[0_8px_30px_rgba(34,211,238,0.25)] sm:text-6xl"
+        className="font-display text-5xl font-semibold text-cyan-50 drop-shadow-[0_0_28px_rgba(125,211,252,0.55)] sm:text-6xl"
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}

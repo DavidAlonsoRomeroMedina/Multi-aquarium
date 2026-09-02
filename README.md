@@ -10,28 +10,35 @@ Temática: acuario mágico, glassmorphism y burbujas.
 - Tailwind CSS
 - Framer Motion
 - React Router DOM
-- Firebase (Firestore + Storage, Auth opcional)
+- Firebase Firestore (plan gratuito)
+- Imágenes de cartas: Base64 (&lt; 1MB) o Imgur (gratis)
 
 ## Estructura
 
 ```
+public/
+  imagenes/          # Fotos de los 19 integrantes (ruta canónica)
+  fondo/             # Fondos de estilo del acuario
 src/
   App.jsx
   firebase.js
+  lib/imageUpload.js
   constants/members.js
   components/
     AquariumBackground.jsx
     GlassCard.jsx
     LetterForm.jsx
+    MemberPicker.jsx
     SiteHeader.jsx
     SuccessMessage.jsx
   pages/
     HomePage.jsx
     AdminPage.jsx
 firestore.rules
-storage.rules
 .env.example
 ```
+
+Las fotos de personajes deben vivir en **`public/imagenes/`** (por ejemplo `/imagenes/Bachira.png`). Vite las sirve desde la raíz del sitio.
 
 - Vista pública: `/` — formulario de carta.
 - Vista oculta: `/admin-secret-aquarium` — buzón y CRUD de integrantes.
@@ -54,50 +61,42 @@ npm run dev
 
 La app queda en `http://localhost:5173`.
 
-## Configurar Firebase
+## Configurar Firebase (gratis)
 
 1. Crea un proyecto en [Firebase Console](https://console.firebase.google.com).
-2. Activa **Firestore**, **Storage** y (si quieres) **Authentication**.
-3. Registra una app web y copia las claves a `.env`:
-
-```
-VITE_FIREBASE_API_KEY=
-VITE_FIREBASE_AUTH_DOMAIN=
-VITE_FIREBASE_PROJECT_ID=
-VITE_FIREBASE_STORAGE_BUCKET=
-VITE_FIREBASE_MESSAGING_SENDER_ID=
-VITE_FIREBASE_APP_ID=
-VITE_ADMIN_PASSWORD=cambia-esta-clave
-```
-
-4. Publica las reglas de este repo:
+2. Activa solo **Firestore** (no hace falta Storage de pago).
+3. Registra una app web y copia las claves a `.env`.
+4. Publica las reglas:
 
 ```bash
-firebase deploy --only firestore:rules,storage
+firebase deploy --only firestore:rules
 ```
 
-5. Entra a `/admin-secret-aquarium`, inicia sesión con `VITE_ADMIN_PASSWORD` y pulsa **Cargar lista inicial de 19 integrantes**.
+5. Entra a `/admin-secret-aquarium` o deja que la app cargue sola la lista de 19 integrantes.
 
 Colecciones usadas:
 
-- `members` — `{ name, createdAt }`
+- `members` — `{ name, image, createdAt }`
 - `letters` — `{ sender, isAnonymous, recipientId, recipientName, message, imageUrl, createdAt }`
 
-Imágenes: `letters/` en Firebase Storage.
+## Imágenes adjuntas (sin Firebase Storage)
+
+Al enviar una carta:
+
+- Si la imagen pesa **menos de 1MB** → se guarda como **Base64** en `imageUrl` dentro de Firestore.
+- Si pesa **1MB o más** → se sube a la API pública de **Imgur** y se guarda el enlace en `imageUrl`.
+
+Para Imgur, crea un Client-ID gratis en [api.imgur.com/oauth2/addclient](https://api.imgur.com/oauth2/addclient) (tipo *Anonymous*) y ponlo en `.env`:
+
+```
+VITE_IMGUR_CLIENT_ID=tu_client_id
+```
+
+Las fotos pequeñas funcionan aunque no configures Imgur.
 
 ## Auth del panel
 
 Por defecto el panel usa una contraseña en `.env`. Esa clave viaja al cliente, así que es una barrera simple, no un candado real.
-
-Para usar Firebase Auth:
-
-```
-VITE_USE_FIREBASE_AUTH=true
-VITE_ADMIN_EMAIL=tu-admin@email.com
-VITE_ADMIN_PASSWORD=la-clave-de-ese-usuario
-```
-
-Luego ajusta las reglas de Firestore/Storage para que solo ese usuario lea cartas.
 
 ## Scripts
 

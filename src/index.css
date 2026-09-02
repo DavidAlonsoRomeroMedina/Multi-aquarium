@@ -3,11 +3,11 @@
 @theme {
   --font-display: "Cormorant Garamond", Georgia, serif;
   --font-sans: "Nunito", system-ui, sans-serif;
-  --color-ocean-abyss: #041018;
-  --color-ocean-deep: #06182b;
-  --color-ocean-navy: #0a2a4a;
-  --color-royal: #1d4ed8;
-  --color-cyan-glow: #67e8f9;
+  --color-ocean-abyss: #02101c;
+  --color-ocean-deep: #063251;
+  --color-ocean-navy: #0a4a7a;
+  --color-royal: #1d6fd8;
+  --color-cyan-glow: #7dd3fc;
   --color-foam: #e0f7fa;
 }
 
@@ -20,13 +20,13 @@ body,
 body {
   margin: 0;
   font-family: var(--font-sans);
-  color: #e8f4ff;
-  background: #041018;
+  color: #e8f7ff;
+  background: #02101c;
   overflow-x: hidden;
 }
 
 ::selection {
-  background: rgba(103, 232, 249, 0.35);
+  background: rgba(125, 211, 252, 0.4);
   color: #fff;
 }
 
@@ -40,22 +40,24 @@ button {
 .glass {
   background: linear-gradient(
     145deg,
-    rgba(255, 255, 255, 0.14),
-    rgba(255, 255, 255, 0.05)
+    rgba(186, 230, 253, 0.18),
+    rgba(8, 47, 73, 0.28) 45%,
+    rgba(255, 255, 255, 0.06)
   );
-  border: 1px solid rgba(186, 230, 253, 0.28);
+  border: 1px solid rgba(186, 230, 253, 0.35);
   box-shadow:
-    0 8px 32px rgba(2, 20, 40, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+    0 10px 40px rgba(2, 20, 40, 0.35),
+    0 0 30px rgba(56, 189, 248, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
 }
 
 .glass-input {
   width: 100%;
   border-radius: 0.85rem;
-  border: 1px solid rgba(186, 230, 253, 0.28);
-  background: rgba(4, 24, 42, 0.45);
+  border: 1px solid rgba(186, 230, 253, 0.32);
+  background: rgba(2, 24, 42, 0.5);
   color: #f0fbff;
   padding: 0.75rem 1rem;
   outline: none;
@@ -69,61 +71,84 @@ button {
 }
 
 .glass-input:focus {
-  border-color: rgba(103, 232, 249, 0.7);
-  box-shadow: 0 0 0 3px rgba(103, 232, 249, 0.18);
+  border-color: rgba(125, 211, 252, 0.85);
+  box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.22);
+}
+
+.member-card {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.member-card-selected {
+  background: linear-gradient(
+    160deg,
+    rgba(103, 232, 249, 0.22),
+    rgba(29, 78, 216, 0.28)
+  );
+  box-shadow:
+    0 0 24px rgba(103, 232, 249, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.avatar-ring {
+  position: relative;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 2px solid rgba(186, 230, 253, 0.55);
+  box-shadow:
+    0 0 0 3px rgba(14, 116, 144, 0.25),
+    0 0 18px rgba(103, 232, 249, 0.35);
+  background: rgba(8, 47, 73, 0.55);
+}
+
+.avatar-ring img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.member-card-selected .avatar-ring {
+  border-color: rgba(165, 243, 252, 0.95);
+  box-shadow:
+    0 0 0 3px rgba(34, 211, 238, 0.35),
+    0 0 24px rgba(103, 232, 249, 0.55);
 }
 
 .light-rays {
   background:
     linear-gradient(
-      115deg,
+      112deg,
       transparent 0%,
-      rgba(125, 211, 252, 0.07) 18%,
-      transparent 32%
+      rgba(186, 230, 253, 0.16) 16%,
+      transparent 30%
     ),
     linear-gradient(
-      95deg,
-      transparent 20%,
-      rgba(34, 211, 238, 0.06) 38%,
-      transparent 52%
+      96deg,
+      transparent 24%,
+      rgba(56, 189, 248, 0.12) 40%,
+      transparent 55%
     ),
     linear-gradient(
-      130deg,
-      transparent 40%,
-      rgba(147, 197, 253, 0.05) 58%,
-      transparent 72%
+      128deg,
+      transparent 48%,
+      rgba(147, 197, 253, 0.1) 62%,
+      transparent 78%
     );
-  animation: rays 18s ease-in-out infinite alternate;
+  animation: rays 16s ease-in-out infinite alternate;
+  mix-blend-mode: screen;
 }
 
 @keyframes rays {
   from {
-    transform: translateX(-6%) rotate(-2deg);
+    transform: translateX(-5%) rotate(-2deg);
     opacity: 0.55;
   }
   to {
-    transform: translateX(8%) rotate(3deg);
+    transform: translateX(7%) rotate(3deg);
     opacity: 1;
-  }
-}
-
-.seaweed {
-  transform-origin: bottom center;
-  animation: sway 6s ease-in-out infinite;
-}
-
-.seaweed-slow {
-  animation-duration: 8.5s;
-  animation-delay: -2s;
-}
-
-@keyframes sway {
-  0%,
-  100% {
-    transform: rotate(-6deg);
-  }
-  50% {
-    transform: rotate(7deg);
   }
 }
 
@@ -132,6 +157,11 @@ button {
 }
 
 .custom-scroll::-webkit-scrollbar-thumb {
-  background: rgba(125, 211, 252, 0.35);
+  background: rgba(125, 211, 252, 0.4);
+  border-radius: 999px;
+}
+
+.custom-scroll::-webkit-scrollbar-track {
+  background: rgba(2, 20, 40, 0.25);
   border-radius: 999px;
 }
