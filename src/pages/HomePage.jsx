@@ -5,7 +5,7 @@ import LetterForm from '../components/LetterForm'
 import SiteHeader from '../components/SiteHeader'
 import SuccessMessage from '../components/SuccessMessage'
 import { INITIAL_MEMBERS, withMemberImages } from '../constants/members'
-import { db, isFirebaseConfigured } from '../firebase'
+import { db, getFirebaseConfigError, isFirebaseConfigured } from '../firebase'
 import { syncMembersCollection, uniqueMembersByName } from '../lib/membersSync'
 
 function withTimeout(promise, ms, message) {
@@ -33,7 +33,7 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!isFirebaseConfigured || !db) {
-      setLoadError('Configura Firebase en el archivo .env para activar el acuario.')
+      setLoadError(getFirebaseConfigError())
       setLoadingMembers(false)
       return undefined
     }
