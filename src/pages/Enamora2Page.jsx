@@ -1,46 +1,40 @@
 import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore'
-import { AnimatePresence, motion } from 'framer-motion'
-import { useEffect, useMemo, useState } from 'react'
+import { motion } from 'framer-motion'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import GlassCard from '../components/GlassCard'
 import LoveThermometer from '../components/LoveThermometer'
 import SiteHeader from '../components/SiteHeader'
-import { phraseForLovePercent, isExtremeLoveScore } from '../constants/lovePhrases'
+import { isExtremeLoveScore, phraseForLovePercent } from '../constants/lovePhrases'
 import { getMemberImage } from '../constants/members'
 import { db, isFirebaseConfigured } from '../firebase'
 import useMembers from '../hooks/useMembers'
 
-function MemberSlot({ label, members, selectedId, onChange }) {
-  const selected = members.find((member) => member.id === selectedId)
-
+function PartnerSlot({ label, member, onClear }) {
   return (
-    <div className="flex w-full max-w-[220px] flex-col items-center gap-3">
-      <span className="avatar-ring h-28 w-28 overflow-hidden rounded-full border-pink-200/70">
-        {selected?.image || selected?.name ? (
+    <div className="flex w-40 flex-col items-center gap-2 sm:w-48">
+      <span className="avatar-ring h-24 w-24 overflow-hidden rounded-full sm:h-28 sm:w-28">
+        {member ? (
           <img
-            src={getMemberImage(selected.name, selected.image)}
-            alt={selected.name}
+            src={getMemberImage(member.name, member.image)}
+            alt={member.name}
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
-          <span className="flex h-full w-full items-center justify-center text-pink-100">?</span>
+          <span className="flex h-full w-full items-center justify-center text-2xl text-pink-100/70">
+            ?
+          </span>
         )}
       </span>
-      <label className="w-full text-center text-xs font-semibold tracking-wide text-pink-100 uppercase">
-        {label}
-      </label>
-      <select
-        className="glass-input text-sm"
-        value={selectedId}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        <option value="">Elige un integrante…</option>
-        {members.map((member) => (
-          <option key={member.id} value={member.id}>
-            {member.name}
-          </option>
-        ))}
-      </select>
+      <p className="text-xs font-semibold tracking-wide text-pink-100/80 uppercase">{label}</p>
+      <p className="min-h-6 text-center font-medium text-pink-50">
+        {member?.name || 'Pendiente'}
+      </p>
+      {member ? (
+        <button type="button" className="text-xs text-pink-200/70 hover:text-pink-50" onClick={onClear}>
+          Quitar
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -55,6 +49,7 @@ export default function Enamora2Page() {
 
   const left = members.find((member) => member.id === leftId)
   const right = members.find((member) => member.id === rightId)
+  const canContinue = Boolean(left && right && left.id !== right.id)
 
   useEffect(() => {
     if (!isFirebaseConfigured || !db) return undefined
@@ -73,11 +68,30 @@ export default function Enamora2Page() {
     )
   }, [])
 
-  const canContinue = Boolean(left && right && left.id !== right.id)
+  function pickMember(id) {
+    setError('')
+    setResult(null)
+
+    if (id === leftId) {
+      setLeftId('')
+      return
+    }
+    if (id === rightId) {
+      setRightId('')
+      return
+    }
+    if (!leftId) {
+      setLeftId(id)
+      return
+    }
+    if (!rightId) {
+      setRightId(id)
+    }
+  }
 
   async function handleContinue() {
     if (!canContinue) {
-      setError('Elige a dos integrantes distintos.')
+      setError('Elige a dos integrantes distintos en la cuadrícula.')
       return
     }
 
@@ -103,11 +117,6 @@ export default function Enamora2Page() {
     }
   }
 
-  const tilt = useMemo(() => {
-    if (!left || !right) return 0
-    return left.name.length > right.name.length ? -6 : 6
-  }, [left, right])
-
   return (
     <div className="relative z-10 mx-auto min-h-screen w-full max-w-6xl px-4 pb-16">
       <SiteHeader subtitle="Enamora2 — anónimo, infinito y un poco cruel." />
@@ -117,37 +126,38 @@ export default function Enamora2Page() {
         </Link>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
         <GlassCard className="overflow-hidden">
-          <div className="mb-8 flex flex-col items-center gap-6 md:flex-row md:justify-between">
-            <MemberSlot
-              label="Integrante A"
-              members={members}
-              selectedId={leftId}
-              onChange={setLeftId}
-            />
+          <div className="flex flex-col items-center justify-center gap-6 md:flex-row md:items-end md:justify-center md:gap-8">
+            <PartnerSlot label="Integrante A" member={left} onClear={() => setLeftId('')} />
 
             <div className="flex flex-col items-center">
-              <motion.div
-                className="relative h-3 w-48 rounded-full bg-pink-200/30"
-                animate={{ rotate: tilt }}
-              >
-                <span className="absolute top-1/2 left-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2 rounded-full border border-pink-100/40 bg-pink-300/40" />
-              </motion.div>
-              <p className="mt-3 font-display text-2xl text-pink-50">Balanza</p>
+              <LoveThermometer percent={result?.percent ?? 0} animate={Boolean(result)} />
+              <p className="font-pixel mt-3 text-[10px] text-pink-50">
+                {result ? `${result.percent}%` : '0%'}
+              </p>
             </div>
 
-            <MemberSlot
-              label="Integrante B"
-              members={members}
-              selectedId={rightId}
-              onChange={setRightId}
-            />
+            <PartnerSlot label="Integrante B" member={right} onClear={() => setRightId('')} />
           </div>
 
-          {error ? <p className="mb-4 text-center text-sm text-rose-100">{error}</p> : null}
+          {result ? (
+            <motion.p
+              className="font-display mx-auto mt-6 max-w-lg text-center text-3xl text-pink-50"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              {result.phrase}
+            </motion.p>
+          ) : (
+            <p className="mt-6 text-center text-sm text-pink-100/70">
+              Toca dos fotos abajo. El termómetro espera vacío hasta Continuar.
+            </p>
+          )}
 
-          <div className="flex justify-center">
+          {error ? <p className="mt-4 text-center text-sm text-rose-100">{error}</p> : null}
+
+          <div className="mt-6 flex justify-center gap-4">
             <button
               type="button"
               className="rounded-2xl bg-gradient-to-r from-pink-600 to-rose-400 px-8 py-3 font-semibold text-white shadow-[0_10px_30px_rgba(255,77,148,0.35)] disabled:opacity-50"
@@ -156,33 +166,55 @@ export default function Enamora2Page() {
             >
               Continuar
             </button>
+            {result ? (
+              <button
+                type="button"
+                className="rounded-2xl border border-pink-100/20 px-5 py-3 text-sm text-pink-50"
+                onClick={() => setResult(null)}
+              >
+                Otra ronda
+              </button>
+            ) : null}
           </div>
 
-          <AnimatePresence>
-            {result ? (
-              <motion.div
-                className="mt-10 flex flex-col items-center gap-6"
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-              >
-                <LoveThermometer percent={result.percent} />
-                <p className="font-pixel text-center text-[11px] leading-6 text-pink-50">
-                  {result.percent}%
-                </p>
-                <p className="font-display max-w-md text-center text-3xl text-pink-50">
-                  {result.phrase}
-                </p>
-                <button
-                  type="button"
-                  className="text-sm text-pink-100 underline-offset-4 hover:underline"
-                  onClick={() => setResult(null)}
-                >
-                  Probar otra pareja
-                </button>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
+          <div className="mt-8">
+            <p className="mb-3 text-center text-sm font-semibold text-pink-100">
+              Elige a la pareja
+            </p>
+            <div className="custom-scroll grid max-h-[22rem] grid-cols-3 gap-3 overflow-y-auto pr-1 sm:grid-cols-4 md:grid-cols-5">
+              {members.map((member) => {
+                const selected = member.id === leftId || member.id === rightId
+                const slot = member.id === leftId ? 'A' : member.id === rightId ? 'B' : ''
+
+                return (
+                  <button
+                    key={member.id}
+                    type="button"
+                    onClick={() => pickMember(member.id)}
+                    className={`glass overflow-hidden rounded-2xl text-left transition ${
+                      selected ? 'ring-2 ring-pink-300/80' : 'hover:bg-white/10'
+                    }`}
+                  >
+                    <span className="relative block aspect-square overflow-hidden">
+                      <img
+                        src={getMemberImage(member.name, member.image)}
+                        alt={member.name}
+                        className="h-full w-full object-cover object-center"
+                      />
+                      {slot ? (
+                        <span className="absolute top-2 right-2 rounded-full bg-pink-500/90 px-2 py-0.5 text-[10px] font-bold text-white">
+                          {slot}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="block truncate px-2 py-2 text-center text-xs font-semibold text-pink-50">
+                      {member.name}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
         </GlassCard>
 
         <aside>

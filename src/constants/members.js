@@ -25,9 +25,9 @@ const IMAGE_BY_NAME = Object.fromEntries(
 )
 
 export function getMemberImage(name, fallbackImage) {
-  if (!name) return fallbackImage || ''
-  // Prefer local catalog so updated PNGs win over old Firestore .jpeg paths.
-  return IMAGE_BY_NAME[name.toLowerCase()] || fallbackImage || ''
+  if (fallbackImage) return fallbackImage
+  if (!name) return ''
+  return IMAGE_BY_NAME[name.toLowerCase()] || ''
 }
 
 export function withMemberImages(members) {

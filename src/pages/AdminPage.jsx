@@ -7,6 +7,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
 } from 'firebase/firestore'
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -15,6 +16,7 @@ import GlassCard from '../components/GlassCard'
 import { withMemberImages } from '../constants/members'
 import { auth, db, isFirebaseConfigured } from '../firebase'
 import { setActivityEnabled } from '../lib/activities'
+import { resolveLetterImage } from '../lib/imageUpload'
 import {
   memberDocId,
   syncMembersCollection,
@@ -47,6 +49,9 @@ export default function AdminPage() {
   const [newMember, setNewMember] = useState('')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
+  const [editing, setEditing] = useState(null)
+  const [editName, setEditName] = useState('')
+  const [editFile, setEditFile] = useState(null)
   const { activities } = useActivities()
 
   useEffect(() => {
@@ -131,6 +136,41 @@ export default function AdminPage() {
     } catch (error) {
       console.error(error)
       setNotice('No se pudo agregar el integrante.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function startEdit(member) {
+    setEditing(member)
+    setEditName(member.name)
+    setEditFile(null)
+    setNotice('')
+  }
+
+  async function saveEdit(event) {
+    event.preventDefault()
+    if (!editing || !db) return
+    const name = editName.trim()
+    if (!name) {
+      setNotice('El nombre no puede quedar vacío.')
+      return
+    }
+
+    setBusy(true)
+    setNotice('')
+    try {
+      const payload = { name }
+      if (editFile) {
+        payload.image = await resolveLetterImage(editFile)
+      }
+      await updateDoc(doc(db, 'members', editing.id), payload)
+      setEditing(null)
+      setEditFile(null)
+      setNotice('Integrante actualizado.')
+    } catch (error) {
+      console.error(error)
+      setNotice(error.message || 'No se pudo actualizar el integrante.')
     } finally {
       setBusy(false)
     }
@@ -387,34 +427,84 @@ export default function AdminPage() {
 
             <div className="space-y-2">
               {members.map((member) => (
-                <div
-                  key={member.id}
-                  className="glass flex items-center justify-between rounded-2xl px-4 py-3"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span className="avatar-ring h-11 w-11 overflow-hidden rounded-full">
-                      {member.image ? (
-                        <img
-                          src={member.image}
-                          alt={member.name}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <span className="flex h-full w-full items-center justify-center bg-cyan-900/50 text-sm">
-                          {member.name.slice(0, 1)}
-                        </span>
-                      )}
-                    </span>
-                    <span className="truncate font-medium text-cyan-50">{member.name}</span>
+                <div key={member.id} className="glass rounded-2xl px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="avatar-ring h-11 w-11 overflow-hidden rounded-full">
+                        {member.image ? (
+                          <img
+                            src={member.image}
+                            alt={member.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <span className="flex h-full w-full items-center justify-center bg-cyan-900/50 text-sm">
+                            {member.name.slice(0, 1)}
+                          </span>
+                        )}
+                      </span>
+                      <span className="truncate font-medium text-cyan-50">{member.name}</span>
+                    </div>
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        type="button"
+                        className="rounded-full bg-cyan-300/15 px-3 py-1 text-sm text-cyan-50 hover:bg-cyan-300/25"
+                        onClick={() => startEdit(member)}
+                        disabled={busy}
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-full bg-rose-400/15 px-3 py-1 text-sm text-rose-100 hover:bg-rose-400/25"
+                        onClick={() => removeMember(member.id)}
+                        disabled={busy}
+                      >
+                        Eliminar
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    className="rounded-full bg-rose-400/15 px-3 py-1 text-sm text-rose-100 hover:bg-rose-400/25"
-                    onClick={() => removeMember(member.id)}
-                    disabled={busy}
-                  >
-                    Eliminar
-                  </button>
+
+                  {editing?.id === member.id ? (
+                    <form className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]" onSubmit={saveEdit}>
+                      <input
+                        className="glass-input"
+                        value={editName}
+                        onChange={(event) => setEditName(event.target.value)}
+                        disabled={busy}
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        <label className="rounded-full bg-white/10 px-3 py-2 text-sm text-cyan-50">
+                          Nueva foto
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp,image/gif"
+                            className="sr-only"
+                            onChange={(event) => setEditFile(event.target.files?.[0] ?? null)}
+                          />
+                        </label>
+                        <button
+                          type="submit"
+                          className="rounded-full bg-gradient-to-r from-blue-700 to-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950"
+                          disabled={busy}
+                        >
+                          Guardar
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-full px-3 py-2 text-sm text-cyan-100/80"
+                          onClick={() => setEditing(null)}
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                      {editFile ? (
+                        <p className="text-xs text-cyan-100/70 sm:col-span-2">
+                          Foto lista: {editFile.name}
+                        </p>
+                      ) : null}
+                    </form>
+                  ) : null}
                 </div>
               ))}
             </div>
