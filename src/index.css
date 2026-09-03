@@ -170,6 +170,31 @@ button {
   font-family: "Press Start 2P", ui-monospace, monospace;
 }
 
+.enamora-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  background:
+    linear-gradient(180deg, rgba(20, 8, 24, 0.35), rgba(20, 8, 24, 0.55)),
+    url("/fondo/sakura-subacuatico.jpg") center / cover no-repeat;
+}
+
+.glass-pink {
+  background: linear-gradient(
+    145deg,
+    rgba(255, 182, 193, 0.2),
+    rgba(88, 16, 48, 0.38) 50%,
+    rgba(255, 255, 255, 0.06)
+  );
+  border: 1px solid rgba(255, 183, 197, 0.38);
+  box-shadow:
+    0 10px 40px rgba(40, 8, 24, 0.35),
+    0 0 28px rgba(255, 77, 148, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+
 .love-meter {
   --love-pink: #ff4d94;
   --love-pink-light: #ffb3d9;
@@ -182,6 +207,48 @@ button {
 .love-meter-column {
   position: relative;
   height: 380px;
+}
+
+@media (max-width: 767px) {
+  .love-meter {
+    width: 108px;
+    padding: 0.35rem 1.15rem 0 0;
+  }
+
+  .love-meter-column {
+    height: 210px;
+  }
+
+  .love-fill-well {
+    width: 42px;
+    border-width: 3px;
+  }
+
+  .love-scale li {
+    font-size: 6px;
+  }
+
+  .love-scale li::before {
+    left: -12px;
+    width: 8px;
+  }
+
+  .love-bow-left,
+  .love-bow-right {
+    width: 26px;
+    height: 18px;
+  }
+
+  .love-bow-center {
+    width: 22px;
+    height: 22px;
+    font-size: 11px;
+  }
+
+  .love-sparkle,
+  .love-petal {
+    display: none;
+  }
 }
 
 .love-fill-well {
