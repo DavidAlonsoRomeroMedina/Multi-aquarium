@@ -165,3 +165,201 @@ button {
   background: rgba(2, 20, 40, 0.25);
   border-radius: 999px;
 }
+
+.font-pixel {
+  font-family: "Press Start 2P", ui-monospace, monospace;
+}
+
+.love-meter {
+  --love-pink: #ff4d94;
+  --love-pink-light: #ffb3d9;
+  --love-border: #4d0026;
+  position: relative;
+  width: 210px;
+  padding: 1.25rem 2.4rem 0 0;
+}
+
+.love-meter-column {
+  position: relative;
+  height: 380px;
+}
+
+.love-fill-well {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 72px;
+  height: 100%;
+  transform: translateX(-50%);
+  overflow: hidden;
+  border: 4px solid var(--love-border);
+  border-radius: 46px 46px 18px 18px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.28) 0 6px, transparent 6px),
+    #ffd6ea;
+  box-shadow:
+    inset 5px 0 0 rgba(255, 255, 255, 0.35),
+    0 0 0 3px #ff8ab8;
+}
+
+.love-fill-well::before {
+  content: "";
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  width: 108px;
+  height: 86px;
+  transform: translateX(-50%);
+  border: 4px solid var(--love-border);
+  border-radius: 50% 50% 46% 46%;
+  background: #ffd6ea;
+  box-shadow: 0 0 0 3px #ff8ab8;
+  clip-path: path(
+    "M54 82 C20 56 4 34 18 16 C30 2 48 10 54 26 C60 10 78 2 90 16 C104 34 88 56 54 82 Z"
+  );
+}
+
+.love-liquid {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.35), transparent 18%),
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 14px,
+      rgba(255, 255, 255, 0.12) 14px 16px
+    ),
+    linear-gradient(180deg, #ff8ab8 0%, var(--love-pink) 55%, #ff2d7a 100%);
+  box-shadow: inset 0 6px 0 rgba(255, 179, 217, 0.55);
+}
+
+.love-liquid::after {
+  content: "♡  ·  ♡";
+  position: absolute;
+  inset: 8px 0 auto;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+}
+
+.love-scale {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  list-style: none;
+  padding: 0;
+}
+
+.love-scale li {
+  position: absolute;
+  right: 0;
+  translate: 0 50%;
+  color: #fff;
+  font-family: "Press Start 2P", ui-monospace, monospace;
+  font-size: 8px;
+  white-space: nowrap;
+}
+
+.love-scale li::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -18px;
+  width: 12px;
+  height: 2px;
+  background: #fff;
+}
+
+.love-bow {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: -8px;
+}
+
+.love-bow-left,
+.love-bow-right {
+  width: 42px;
+  height: 28px;
+  background: var(--love-pink);
+  border: 3px solid var(--love-border);
+}
+
+.love-bow-left {
+  border-radius: 18px 6px 18px 10px;
+  transform: rotate(-18deg);
+}
+
+.love-bow-right {
+  border-radius: 6px 18px 10px 18px;
+  transform: rotate(18deg);
+}
+
+.love-bow-center {
+  z-index: 1;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 3px solid var(--love-border);
+  border-radius: 999px;
+  background: var(--love-pink-light);
+  color: #ff4d94;
+  font-size: 16px;
+}
+
+.love-sparkle,
+.love-petal {
+  position: absolute;
+  color: #fff;
+  animation: love-float 3.4s ease-in-out infinite;
+}
+
+.love-sparkle-a { top: 8%; left: 4%; font-size: 18px; }
+.love-sparkle-b { top: 28%; right: 0; color: #ffb3d9; }
+.love-sparkle-c { bottom: 22%; left: 0; color: #ffb3d9; animation-delay: -1s; }
+.love-sparkle-d { top: 48%; left: 10%; font-size: 12px; animation-delay: -1.6s; }
+.love-petal-a { top: 16%; right: 18%; color: #ff8ab8; animation-delay: -0.5s; }
+.love-petal-b { bottom: 30%; right: 8%; color: #ffb3d9; animation-delay: -2s; }
+
+@keyframes love-float {
+  0%,
+  100% { transform: translateY(0) rotate(-8deg); opacity: 0.75; }
+  50% { transform: translateY(-8px) rotate(8deg); opacity: 1; }
+}
+
+.activity-toggle {
+  position: relative;
+  width: 52px;
+  height: 30px;
+  border-radius: 999px;
+  border: 1px solid rgba(186, 230, 253, 0.3);
+  background: rgba(8, 47, 73, 0.7);
+  transition: background 0.2s ease;
+}
+
+.activity-toggle[data-on="true"] {
+  background: linear-gradient(90deg, #1d4ed8, #22d3ee);
+}
+
+.activity-toggle span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #fff;
+  transition: transform 0.2s ease;
+}
+
+.activity-toggle[data-on="true"] span {
+  transform: translateX(22px);
+}

@@ -14,11 +14,13 @@ import { useEffect, useMemo, useState } from 'react'
 import GlassCard from '../components/GlassCard'
 import { withMemberImages } from '../constants/members'
 import { auth, db, isFirebaseConfigured } from '../firebase'
+import { setActivityEnabled } from '../lib/activities'
 import {
   memberDocId,
   syncMembersCollection,
   uniqueMembersByName,
 } from '../lib/membersSync'
+import useActivities from '../hooks/useActivities'
 
 const ADMIN_SESSION_KEY = 'multi-aquarium-admin'
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || ''
@@ -45,6 +47,7 @@ export default function AdminPage() {
   const [newMember, setNewMember] = useState('')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
+  const { activities } = useActivities()
 
   useEffect(() => {
     if (!unlocked || !db) return undefined
@@ -174,10 +177,24 @@ export default function AdminPage() {
     }
   }
 
+  async function toggleActivity(id, enabled) {
+    setBusy(true)
+    setNotice('')
+    try {
+      await setActivityEnabled(id, enabled)
+    } catch (error) {
+      console.error(error)
+      setNotice('No se pudo actualizar la actividad.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const tabs = useMemo(
     () => [
       { id: 'letters', label: 'Buzón de Cartas' },
       { id: 'members', label: 'Gestión de Integrantes' },
+      { id: 'activities', label: 'Actividades' },
     ],
     [],
   )
@@ -258,7 +275,36 @@ export default function AdminPage() {
       {notice ? <p className="mb-4 text-sm text-cyan-100/80">{notice}</p> : null}
 
       <AnimatePresence mode="wait">
-        {tab === 'letters' ? (
+        {tab === 'activities' ? (
+          <motion.section
+            key="activities"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="space-y-3"
+          >
+            {activities.map((activity) => (
+              <GlassCard key={activity.id} className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="font-display text-2xl text-cyan-50">{activity.title}</h2>
+                  <p className="text-sm text-sky-100/75">{activity.description}</p>
+                  <p className="mt-1 text-xs text-cyan-200/70">{activity.path}</p>
+                </div>
+                <button
+                  type="button"
+                  className="activity-toggle"
+                  data-on={activity.enabled ? 'true' : 'false'}
+                  onClick={() => toggleActivity(activity.id, !activity.enabled)}
+                  disabled={busy}
+                  aria-pressed={activity.enabled}
+                  aria-label={`Alternar ${activity.title}`}
+                >
+                  <span />
+                </button>
+              </GlassCard>
+            ))}
+          </motion.section>
+        ) : tab === 'letters' ? (
           <motion.section
             key="letters"
             initial={{ opacity: 0, y: 10 }}

@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 
-export default function SiteHeader() {
+export default function SiteHeader({ subtitle = 'Elige una actividad del acuario mágico.' }) {
   return (
     <header className="relative z-10 mx-auto flex w-full max-w-5xl flex-col items-center px-4 pt-10 text-center sm:pt-14">
       <motion.p
@@ -24,7 +24,7 @@ export default function SiteHeader() {
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2 }}
       >
-        Admirador Secreto — deja una carta flotar hasta alguien del grupo.
+        {subtitle}
       </motion.p>
     </header>
   )

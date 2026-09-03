@@ -12,5 +12,17 @@ service cloud.firestore {
       ]);
       allow read, delete: if true;
     }
+
+    match /activities/{activityId} {
+      allow read, write: if true;
+    }
+
+    match /loveMatches/{matchId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['leftName', 'rightName', 'percent'])
+        && request.resource.data.percent is number
+        && (request.resource.data.percent <= 10 || request.resource.data.percent >= 90);
+      allow delete: if true;
+    }
   }
 }
