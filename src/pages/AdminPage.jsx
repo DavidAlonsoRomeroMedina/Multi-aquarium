@@ -2,12 +2,14 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
   setDoc,
   updateDoc,
+  writeBatch,
 } from 'firebase/firestore'
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -43,8 +45,10 @@ export default function AdminPage() {
   )
   const [password, setPassword] = useState('')
   const [authError, setAuthError] = useState('')
-  const [tab, setTab] = useState('letters')
+  const [tab, setTab] = useState('activities')
+  const [managing, setManaging] = useState(null)
   const [letters, setLetters] = useState([])
+  const [matches, setMatches] = useState([])
   const [members, setMembers] = useState([])
   const [newMember, setNewMember] = useState('')
   const [busy, setBusy] = useState(false)
@@ -77,9 +81,17 @@ export default function AdminPage() {
       },
     )
 
+    const matchesUnsub = onSnapshot(
+      query(collection(db, 'loveMatches'), orderBy('createdAt', 'desc')),
+      (snapshot) => {
+        setMatches(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })))
+      },
+    )
+
     return () => {
       lettersUnsub()
       membersUnsub()
+      matchesUnsub()
     }
   }, [unlocked])
 
@@ -204,14 +216,75 @@ export default function AdminPage() {
     }
   }
 
+  async function deleteCollectionDocs(collectionName) {
+    const snapshot = await getDocs(collection(db, collectionName))
+    const docs = snapshot.docs
+    for (let index = 0; index < docs.length; index += 400) {
+      const batch = writeBatch(db)
+      docs.slice(index, index + 400).forEach((item) => batch.delete(item.ref))
+      await batch.commit()
+    }
+  }
+
   async function removeLetter(id) {
     if (!db) return
     setBusy(true)
+    setNotice('')
     try {
       await deleteDoc(doc(db, 'letters', id))
     } catch (error) {
       console.error(error)
-      setNotice('No se pudo archivar la carta.')
+      setNotice('No se pudo eliminar la carta.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function clearLetters() {
+    if (!db || letters.length === 0) return
+    if (!window.confirm('¿Vaciar todo el buzón? Esta acción no se puede deshacer.')) {
+      return
+    }
+    setBusy(true)
+    setNotice('')
+    try {
+      await deleteCollectionDocs('letters')
+      setNotice('El buzón quedó vacío.')
+    } catch (error) {
+      console.error(error)
+      setNotice('No se pudo vaciar el buzón.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function removeMatch(id) {
+    if (!db) return
+    setBusy(true)
+    setNotice('')
+    try {
+      await deleteDoc(doc(db, 'loveMatches', id))
+    } catch (error) {
+      console.error(error)
+      setNotice('No se pudo eliminar el registro.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function clearMatches() {
+    if (!db || matches.length === 0) return
+    if (!window.confirm('¿Vaciar todos los registros extremos? Esta acción no se puede deshacer.')) {
+      return
+    }
+    setBusy(true)
+    setNotice('')
+    try {
+      await deleteCollectionDocs('loveMatches')
+      setNotice('Los registros de Enamora2 quedaron vacíos.')
+    } catch (error) {
+      console.error(error)
+      setNotice('No se pudieron vaciar los registros.')
     } finally {
       setBusy(false)
     }
@@ -232,7 +305,6 @@ export default function AdminPage() {
 
   const tabs = useMemo(
     () => [
-      { id: 'letters', label: 'Buzón de Cartas' },
       { id: 'members', label: 'Gestión de Integrantes' },
       { id: 'activities', label: 'Actividades' },
     ],
@@ -305,7 +377,10 @@ export default function AdminPage() {
                 ? 'bg-cyan-300/25 text-white'
                 : 'bg-white/5 text-cyan-100/80 hover:bg-white/10'
             }`}
-            onClick={() => setTab(item.id)}
+            onClick={() => {
+              setTab(item.id)
+              setManaging(null)
+            }}
           >
             {item.label}
           </button>
@@ -323,72 +398,182 @@ export default function AdminPage() {
             exit={{ opacity: 0, y: -8 }}
             className="space-y-3"
           >
-            {activities.map((activity) => (
-              <GlassCard key={activity.id} className="flex items-center justify-between gap-4">
-                <div>
-                  <h2 className="font-display text-2xl text-cyan-50">{activity.title}</h2>
-                  <p className="text-sm text-sky-100/75">{activity.description}</p>
-                  <p className="mt-1 text-xs text-cyan-200/70">{activity.path}</p>
+            {managing === 'admirador-secreto' ? (
+              <>
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <button
+                      type="button"
+                      className="text-sm text-cyan-200 underline-offset-4 hover:underline"
+                      onClick={() => setManaging(null)}
+                    >
+                      Volver a actividades
+                    </button>
+                    <h2 className="font-display mt-1 text-3xl text-cyan-50">Buzón de Admirador Secreto</h2>
+                    <p className="text-sm text-sky-100/70">
+                      {letters.length} {letters.length === 1 ? 'carta' : 'cartas'} en el acuario.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded-full border border-rose-200/30 bg-rose-400/15 px-4 py-2 text-sm font-semibold text-rose-50 hover:bg-rose-400/25 disabled:opacity-40"
+                    onClick={clearLetters}
+                    disabled={busy || letters.length === 0}
+                  >
+                    Vaciar buzón
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  className="activity-toggle"
-                  data-on={activity.enabled ? 'true' : 'false'}
-                  onClick={() => toggleActivity(activity.id, !activity.enabled)}
-                  disabled={busy}
-                  aria-pressed={activity.enabled}
-                  aria-label={`Alternar ${activity.title}`}
-                >
-                  <span />
-                </button>
-              </GlassCard>
-            ))}
-          </motion.section>
-        ) : tab === 'letters' ? (
-          <motion.section
-            key="letters"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-          >
-            {letters.length === 0 ? (
-              <GlassCard>
-                <p className="text-sky-100/75">Todavía no hay cartas en el buzón.</p>
-              </GlassCard>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2">
-                {letters.map((letter) => (
-                  <GlassCard key={letter.id} className="flex flex-col gap-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-xs tracking-wide text-cyan-200/70 uppercase">
-                          {formatDate(letter.createdAt)}
-                        </p>
-                        <h2 className="font-display text-2xl text-cyan-50">
-                          Para {letter.recipientName}
-                        </h2>
-                        <p className="text-sm text-sky-100/80">De {letter.sender}</p>
-                      </div>
-                      <button
-                        type="button"
-                        className="text-xs text-rose-200/80 hover:text-rose-100"
-                        onClick={() => removeLetter(letter.id)}
-                        disabled={busy}
-                      >
-                        Archivar
-                      </button>
-                    </div>
-                    <p className="whitespace-pre-wrap text-sky-50/90">{letter.message}</p>
-                    {letter.imageUrl ? (
-                      <img
-                        src={letter.imageUrl}
-                        alt={`Adjunto de ${letter.sender}`}
-                        className="max-h-64 w-full rounded-2xl object-cover object-center"
-                      />
-                    ) : null}
+                {letters.length === 0 ? (
+                  <GlassCard>
+                    <p className="text-sky-100/75">Todavía no hay cartas en el buzón.</p>
                   </GlassCard>
-                ))}
-              </div>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {letters.map((letter) => (
+                      <GlassCard key={letter.id} className="flex flex-col gap-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-xs tracking-wide text-cyan-200/70 uppercase">
+                              {formatDate(letter.createdAt)}
+                            </p>
+                            <h3 className="font-display text-2xl text-cyan-50">
+                              Para {letter.recipientName}
+                            </h3>
+                            <p className="text-sm text-sky-100/80">De {letter.sender}</p>
+                          </div>
+                          <button
+                            type="button"
+                            className="text-xs text-rose-200/80 hover:text-rose-100"
+                            onClick={() => removeLetter(letter.id)}
+                            disabled={busy}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                        <p className="whitespace-pre-wrap text-sky-50/90">{letter.message}</p>
+                        {letter.imageUrl ? (
+                          <img
+                            src={letter.imageUrl}
+                            alt={`Adjunto de ${letter.sender}`}
+                            className="max-h-64 w-full rounded-2xl object-cover object-center"
+                          />
+                        ) : null}
+                      </GlassCard>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : managing === 'enamora2' ? (
+              <>
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
+                    <button
+                      type="button"
+                      className="text-sm text-cyan-200 underline-offset-4 hover:underline"
+                      onClick={() => setManaging(null)}
+                    >
+                      Volver a actividades
+                    </button>
+                    <h2 className="font-display mt-1 text-3xl text-cyan-50">Registros de Enamora2</h2>
+                    <p className="text-sm text-sky-100/70">
+                      {matches.length} {matches.length === 1 ? 'resultado extremo' : 'resultados extremos'} guardados.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded-full border border-rose-200/30 bg-rose-400/15 px-4 py-2 text-sm font-semibold text-rose-50 hover:bg-rose-400/25 disabled:opacity-40"
+                    onClick={clearMatches}
+                    disabled={busy || matches.length === 0}
+                  >
+                    Vaciar registros
+                  </button>
+                </div>
+                {matches.length === 0 ? (
+                  <GlassCard>
+                    <p className="text-sky-100/75">
+                      Aún no hay destinos extremos (0–10% o 90–100%).
+                    </p>
+                  </GlassCard>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {matches.map((match) => (
+                      <GlassCard key={match.id} className="flex flex-col gap-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-xs tracking-wide text-cyan-200/70 uppercase">
+                              {formatDate(match.createdAt)}
+                            </p>
+                            <h3 className="font-display text-2xl text-cyan-50">
+                              {match.leftName} + {match.rightName}
+                            </h3>
+                            <p className="text-sm text-pink-100/90">{match.percent}%</p>
+                          </div>
+                          <button
+                            type="button"
+                            className="text-xs text-rose-200/80 hover:text-rose-100"
+                            onClick={() => removeMatch(match.id)}
+                            disabled={busy}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          {match.leftImage ? (
+                            <img
+                              src={match.leftImage}
+                              alt={match.leftName}
+                              className="h-12 w-12 rounded-full object-cover"
+                            />
+                          ) : null}
+                          {match.rightImage ? (
+                            <img
+                              src={match.rightImage}
+                              alt={match.rightName}
+                              className="h-12 w-12 rounded-full object-cover"
+                            />
+                          ) : null}
+                        </div>
+                        {match.phrase ? (
+                          <p className="text-sm text-sky-50/90">{match.phrase}</p>
+                        ) : null}
+                      </GlassCard>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              activities.map((activity) => (
+                <GlassCard
+                  key={activity.id}
+                  className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <h2 className="font-display text-2xl text-cyan-50">{activity.title}</h2>
+                    <p className="text-sm text-sky-100/75">{activity.description}</p>
+                    <p className="mt-1 text-xs text-cyan-200/70">{activity.path}</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <button
+                      type="button"
+                      className="rounded-full border border-cyan-100/25 bg-white/10 px-4 py-2 text-sm font-semibold text-cyan-50 hover:bg-white/15"
+                      onClick={() => setManaging(activity.id)}
+                    >
+                      Administrar
+                    </button>
+                    <button
+                      type="button"
+                      className="activity-toggle"
+                      data-on={activity.enabled ? 'true' : 'false'}
+                      onClick={() => toggleActivity(activity.id, !activity.enabled)}
+                      disabled={busy}
+                      aria-pressed={activity.enabled}
+                      aria-label={`Alternar ${activity.title}`}
+                    >
+                      <span />
+                    </button>
+                  </div>
+                </GlassCard>
+              ))
             )}
           </motion.section>
         ) : (

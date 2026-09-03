@@ -2,6 +2,7 @@ import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp } from 
 import { motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import EnamoraAtmosphere from '../components/EnamoraAtmosphere'
 import LoveThermometer from '../components/LoveThermometer'
 import SiteHeader from '../components/SiteHeader'
 import { isExtremeLoveScore, phraseForLovePercent } from '../constants/lovePhrases'
@@ -125,6 +126,7 @@ export default function Enamora2Page() {
   return (
     <>
       <div className="enamora-bg" aria-hidden="true" />
+      <EnamoraAtmosphere />
       <div className="relative z-10 mx-auto min-h-screen w-full max-w-6xl overflow-x-hidden px-3 pb-16 sm:px-4">
       <SiteHeader subtitle="Enamora2 — anónimo, infinito y un poco cruel." />
       <div className="mb-4 text-center">

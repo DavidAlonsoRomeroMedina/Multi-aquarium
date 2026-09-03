@@ -51,7 +51,7 @@ export default function useMembers() {
               snapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
             ),
           )
-          setMembers(next.length ? next : localMembersFallback())
+          setMembers(next)
           setLoading(false)
           setError('')
         },
