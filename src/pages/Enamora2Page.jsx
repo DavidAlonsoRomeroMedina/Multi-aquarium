@@ -123,9 +123,9 @@ export default function Enamora2Page() {
   }
 
   return (
-    <div className="relative z-10 mx-auto min-h-screen w-full max-w-6xl overflow-x-hidden px-3 pb-16 sm:px-4">
+    <>
       <div className="enamora-bg" aria-hidden="true" />
-
+      <div className="relative z-10 mx-auto min-h-screen w-full max-w-6xl overflow-x-hidden px-3 pb-16 sm:px-4">
       <SiteHeader subtitle="Enamora2 — anónimo, infinito y un poco cruel." />
       <div className="mb-4 text-center">
         <Link to="/" className="text-sm text-pink-50 underline-offset-4 drop-shadow hover:underline">
@@ -257,6 +257,7 @@ export default function Enamora2Page() {
           </section>
         </aside>
       </div>
-    </div>
+      </div>
+    </>
   )
 }
