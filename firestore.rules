@@ -1,28 +1,9 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /members/{memberId} {
+    match /gift/{id} {
       allow read: if true;
-      allow create, update, delete: if true;
-    }
-
-    match /letters/{letterId} {
-      allow create: if request.resource.data.keys().hasAll([
-        'sender', 'recipientId', 'recipientName', 'message'
-      ]);
-      allow read, delete: if true;
-    }
-
-    match /activities/{activityId} {
-      allow read, write: if true;
-    }
-
-    match /loveMatches/{matchId} {
-      allow read: if true;
-      allow create: if request.resource.data.keys().hasAll(['leftName', 'rightName', 'percent'])
-        && request.resource.data.percent is number
-        && (request.resource.data.percent <= 10 || request.resource.data.percent >= 90);
-      allow delete: if true;
+      allow write: if true;
     }
   }
 }

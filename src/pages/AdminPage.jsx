@@ -1,43 +1,12 @@
-import {
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  onSnapshot,
-  orderBy,
-  query,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-  writeBatch,
-} from 'firebase/firestore'
-import { signInWithEmailAndPassword, signOut } from 'firebase/auth'
-import { AnimatePresence, motion } from 'framer-motion'
-import { useEffect, useMemo, useState } from 'react'
-import GlassCard from '../components/GlassCard'
-import { withMemberImages } from '../constants/members'
-import { auth, db, isFirebaseConfigured } from '../firebase'
-import { setActivityEnabled } from '../lib/activities'
-import { resolveLetterImage } from '../lib/imageUpload'
-import {
-  memberDocId,
-  syncMembersCollection,
-  uniqueMembersByName,
-} from '../lib/membersSync'
-import useActivities from '../hooks/useActivities'
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import NightSky from '../components/NightSky'
+import useGift from '../hooks/useGift'
+import { setGiftEnabled } from '../lib/gift'
+import { isFirebaseConfigured } from '../firebase'
 
-const ADMIN_SESSION_KEY = 'multi-aquarium-admin'
+const ADMIN_SESSION_KEY = 'carta-abril-admin'
 const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || ''
-const ADMIN_EMAIL = import.meta.env.VITE_ADMIN_EMAIL || ''
-const USE_FIREBASE_AUTH = import.meta.env.VITE_USE_FIREBASE_AUTH === 'true'
-
-function formatDate(value) {
-  if (!value?.toDate) return 'Hace un momento'
-  return value.toDate().toLocaleString('es-ES', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  })
-}
 
 export default function AdminPage() {
   const [unlocked, setUnlocked] = useState(
@@ -45,657 +14,138 @@ export default function AdminPage() {
   )
   const [password, setPassword] = useState('')
   const [authError, setAuthError] = useState('')
-  const [tab, setTab] = useState('activities')
-  const [managing, setManaging] = useState(null)
-  const [letters, setLetters] = useState([])
-  const [matches, setMatches] = useState([])
-  const [members, setMembers] = useState([])
-  const [newMember, setNewMember] = useState('')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
-  const [editing, setEditing] = useState(null)
-  const [editName, setEditName] = useState('')
-  const [editFile, setEditFile] = useState(null)
-  const { activities } = useActivities()
+  const { enabled, loading } = useGift()
 
-  useEffect(() => {
-    if (!unlocked || !db) return undefined
-
-    const lettersUnsub = onSnapshot(
-      query(collection(db, 'letters'), orderBy('createdAt', 'desc')),
-      (snapshot) => {
-        setLetters(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })))
-      },
-    )
-
-    const membersUnsub = onSnapshot(
-      query(collection(db, 'members'), orderBy('name')),
-      (snapshot) => {
-        setMembers(
-          uniqueMembersByName(
-            withMemberImages(
-              snapshot.docs.map((item) => ({ id: item.id, ...item.data() })),
-            ),
-          ),
-        )
-      },
-    )
-
-    const matchesUnsub = onSnapshot(
-      query(collection(db, 'loveMatches'), orderBy('createdAt', 'desc')),
-      (snapshot) => {
-        setMatches(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })))
-      },
-    )
-
-    return () => {
-      lettersUnsub()
-      membersUnsub()
-      matchesUnsub()
-    }
-  }, [unlocked])
-
-  const missingConfig = !isFirebaseConfigured || !db
-
-  async function handleUnlock(event) {
+  function handleUnlock(event) {
     event.preventDefault()
     setAuthError('')
 
-    try {
-      if (USE_FIREBASE_AUTH) {
-        if (!auth || !ADMIN_EMAIL) {
-          throw new Error('Firebase Auth no está configurado.')
-        }
-        await signInWithEmailAndPassword(auth, ADMIN_EMAIL, password)
-      } else if (!ADMIN_PASSWORD || password !== ADMIN_PASSWORD) {
-        setAuthError('La contraseña no abre esta esclusa.')
-        return
-      }
-
-      sessionStorage.setItem(ADMIN_SESSION_KEY, '1')
-      setUnlocked(true)
-      setPassword('')
-    } catch {
-      setAuthError('No se pudo entrar al panel. Revisa las credenciales.')
+    if (!ADMIN_PASSWORD || password !== ADMIN_PASSWORD) {
+      setAuthError('Esa clave no abre esta puerta.')
+      return
     }
+
+    sessionStorage.setItem(ADMIN_SESSION_KEY, '1')
+    setUnlocked(true)
+    setPassword('')
   }
 
-  async function handleLogout() {
+  function handleLogout() {
     sessionStorage.removeItem(ADMIN_SESSION_KEY)
     setUnlocked(false)
-    if (USE_FIREBASE_AUTH && auth) {
-      await signOut(auth)
-    }
   }
 
-  async function addMember(event) {
-    event.preventDefault()
-    const name = newMember.trim()
-    if (!name || !db) return
-
+  async function toggleGift() {
     setBusy(true)
     setNotice('')
     try {
-      await setDoc(
-        doc(db, 'members', memberDocId(name)),
-        {
-          name,
-          createdAt: serverTimestamp(),
-        },
-        { merge: true },
+      await setGiftEnabled(!enabled)
+      setNotice(enabled ? 'La carta quedó en pausa.' : 'La carta ya está encendida.')
+    } catch (error) {
+      console.error(error)
+      setNotice(
+        'No se pudo guardar. Publica las reglas nuevas de Firestore o revisa Firebase.',
       )
-      setNewMember('')
-    } catch (error) {
-      console.error(error)
-      setNotice('No se pudo agregar el integrante.')
     } finally {
       setBusy(false)
     }
-  }
-
-  function startEdit(member) {
-    setEditing(member)
-    setEditName(member.name)
-    setEditFile(null)
-    setNotice('')
-  }
-
-  async function saveEdit(event) {
-    event.preventDefault()
-    if (!editing || !db) return
-    const name = editName.trim()
-    if (!name) {
-      setNotice('El nombre no puede quedar vacío.')
-      return
-    }
-
-    setBusy(true)
-    setNotice('')
-    try {
-      const payload = { name }
-      if (editFile) {
-        payload.image = await resolveLetterImage(editFile)
-      }
-      await updateDoc(doc(db, 'members', editing.id), payload)
-      setEditing(null)
-      setEditFile(null)
-      setNotice('Integrante actualizado.')
-    } catch (error) {
-      console.error(error)
-      setNotice(error.message || 'No se pudo actualizar el integrante.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function removeMember(id) {
-    if (!db) return
-    setBusy(true)
-    try {
-      await deleteDoc(doc(db, 'members', id))
-    } catch (error) {
-      console.error(error)
-      setNotice('No se pudo eliminar el integrante.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function seedMembers() {
-    if (!db) return
-    setBusy(true)
-    setNotice('')
-    try {
-      await syncMembersCollection()
-      setNotice('Lista sincronizada: 19 integrantes únicos (duplicados eliminados).')
-    } catch (error) {
-      console.error(error)
-      setNotice('No se pudo cargar la lista inicial.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function deleteCollectionDocs(collectionName) {
-    const snapshot = await getDocs(collection(db, collectionName))
-    const docs = snapshot.docs
-    for (let index = 0; index < docs.length; index += 400) {
-      const batch = writeBatch(db)
-      docs.slice(index, index + 400).forEach((item) => batch.delete(item.ref))
-      await batch.commit()
-    }
-  }
-
-  async function removeLetter(id) {
-    if (!db) return
-    setBusy(true)
-    setNotice('')
-    try {
-      await deleteDoc(doc(db, 'letters', id))
-    } catch (error) {
-      console.error(error)
-      setNotice('No se pudo eliminar la carta.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function clearLetters() {
-    if (!db || letters.length === 0) return
-    if (!window.confirm('¿Vaciar todo el buzón? Esta acción no se puede deshacer.')) {
-      return
-    }
-    setBusy(true)
-    setNotice('')
-    try {
-      await deleteCollectionDocs('letters')
-      setNotice('El buzón quedó vacío.')
-    } catch (error) {
-      console.error(error)
-      setNotice('No se pudo vaciar el buzón.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function removeMatch(id) {
-    if (!db) return
-    setBusy(true)
-    setNotice('')
-    try {
-      await deleteDoc(doc(db, 'loveMatches', id))
-    } catch (error) {
-      console.error(error)
-      setNotice('No se pudo eliminar el registro.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function clearMatches() {
-    if (!db || matches.length === 0) return
-    if (!window.confirm('¿Vaciar todos los registros extremos? Esta acción no se puede deshacer.')) {
-      return
-    }
-    setBusy(true)
-    setNotice('')
-    try {
-      await deleteCollectionDocs('loveMatches')
-      setNotice('Los registros de Enamora2 quedaron vacíos.')
-    } catch (error) {
-      console.error(error)
-      setNotice('No se pudieron vaciar los registros.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function toggleActivity(id, enabled) {
-    setBusy(true)
-    setNotice('')
-    try {
-      await setActivityEnabled(id, enabled)
-    } catch (error) {
-      console.error(error)
-      setNotice('No se pudo actualizar la actividad.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const tabs = useMemo(
-    () => [
-      { id: 'members', label: 'Gestión de Integrantes' },
-      { id: 'activities', label: 'Actividades' },
-    ],
-    [],
-  )
-
-  if (!unlocked) {
-    return (
-      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-lg items-center px-4 py-16">
-        <GlassCard className="w-full">
-          <p className="text-xs font-semibold tracking-[0.28em] text-cyan-200/80 uppercase">
-            Zona oculta
-          </p>
-          <h1 className="font-display mt-2 text-4xl text-cyan-50">Panel del Acuario</h1>
-          <p className="mt-2 text-sm text-sky-100/75">
-            Solo quienes conocen la clave pueden ver las cartas y cuidar a los integrantes.
-          </p>
-          <form className="mt-6 space-y-4" onSubmit={handleUnlock}>
-            <input
-              type="password"
-              className="glass-input"
-              placeholder="Contraseña de administrador"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
-            {authError ? <p className="text-sm text-rose-200">{authError}</p> : null}
-            <button
-              type="submit"
-              className="w-full rounded-2xl bg-gradient-to-r from-blue-800 to-cyan-500 px-5 py-3 font-semibold text-white"
-            >
-              Entrar
-            </button>
-          </form>
-        </GlassCard>
-      </div>
-    )
   }
 
   return (
-    <div className="relative z-10 mx-auto min-h-screen w-full max-w-6xl px-4 py-10">
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold tracking-[0.28em] text-cyan-200/80 uppercase">
-            Administrador
-          </p>
-          <h1 className="font-display text-4xl text-cyan-50">Panel secreto del acuario</h1>
-        </div>
-        <button
-          type="button"
-          className="rounded-full border border-cyan-100/20 bg-white/5 px-4 py-2 text-sm text-cyan-50"
-          onClick={handleLogout}
-        >
-          Cerrar sesión
-        </button>
-      </div>
-
-      {missingConfig ? (
-        <p className="mb-4 rounded-2xl border border-amber-200/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
-          Firebase no está configurado. Completa el archivo .env para usar el panel.
-        </p>
-      ) : null}
-
-      <div className="mb-6 flex flex-wrap gap-2">
-        {tabs.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            className={`rounded-full px-4 py-2 text-sm font-semibold ${
-              tab === item.id
-                ? 'bg-cyan-300/25 text-white'
-                : 'bg-white/5 text-cyan-100/80 hover:bg-white/10'
-            }`}
-            onClick={() => {
-              setTab(item.id)
-              setManaging(null)
-            }}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-
-      {notice ? <p className="mb-4 text-sm text-cyan-100/80">{notice}</p> : null}
-
-      <AnimatePresence mode="wait">
-        {tab === 'activities' ? (
-          <motion.section
-            key="activities"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="space-y-3"
-          >
-            {managing === 'admirador-secreto' ? (
-              <>
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                  <div>
-                    <button
-                      type="button"
-                      className="text-sm text-cyan-200 underline-offset-4 hover:underline"
-                      onClick={() => setManaging(null)}
-                    >
-                      Volver a actividades
-                    </button>
-                    <h2 className="font-display mt-1 text-3xl text-cyan-50">Buzón de Admirador Secreto</h2>
-                    <p className="text-sm text-sky-100/70">
-                      {letters.length} {letters.length === 1 ? 'carta' : 'cartas'} en el acuario.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="rounded-full border border-rose-200/30 bg-rose-400/15 px-4 py-2 text-sm font-semibold text-rose-50 hover:bg-rose-400/25 disabled:opacity-40"
-                    onClick={clearLetters}
-                    disabled={busy || letters.length === 0}
-                  >
-                    Vaciar buzón
-                  </button>
-                </div>
-                {letters.length === 0 ? (
-                  <GlassCard>
-                    <p className="text-sky-100/75">Todavía no hay cartas en el buzón.</p>
-                  </GlassCard>
-                ) : (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {letters.map((letter) => (
-                      <GlassCard key={letter.id} className="flex flex-col gap-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-xs tracking-wide text-cyan-200/70 uppercase">
-                              {formatDate(letter.createdAt)}
-                            </p>
-                            <h3 className="font-display text-2xl text-cyan-50">
-                              Para {letter.recipientName}
-                            </h3>
-                            <p className="text-sm text-sky-100/80">De {letter.sender}</p>
-                          </div>
-                          <button
-                            type="button"
-                            className="text-xs text-rose-200/80 hover:text-rose-100"
-                            onClick={() => removeLetter(letter.id)}
-                            disabled={busy}
-                          >
-                            Eliminar
-                          </button>
-                        </div>
-                        <p className="whitespace-pre-wrap text-sky-50/90">{letter.message}</p>
-                        {letter.imageUrl ? (
-                          <img
-                            src={letter.imageUrl}
-                            alt={`Adjunto de ${letter.sender}`}
-                            className="max-h-64 w-full rounded-2xl object-cover object-center"
-                          />
-                        ) : null}
-                      </GlassCard>
-                    ))}
-                  </div>
-                )}
-              </>
-            ) : managing === 'enamora2' ? (
-              <>
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                  <div>
-                    <button
-                      type="button"
-                      className="text-sm text-cyan-200 underline-offset-4 hover:underline"
-                      onClick={() => setManaging(null)}
-                    >
-                      Volver a actividades
-                    </button>
-                    <h2 className="font-display mt-1 text-3xl text-cyan-50">Registros de Enamora2</h2>
-                    <p className="text-sm text-sky-100/70">
-                      {matches.length} {matches.length === 1 ? 'resultado extremo' : 'resultados extremos'} guardados.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="rounded-full border border-rose-200/30 bg-rose-400/15 px-4 py-2 text-sm font-semibold text-rose-50 hover:bg-rose-400/25 disabled:opacity-40"
-                    onClick={clearMatches}
-                    disabled={busy || matches.length === 0}
-                  >
-                    Vaciar registros
-                  </button>
-                </div>
-                {matches.length === 0 ? (
-                  <GlassCard>
-                    <p className="text-sky-100/75">
-                      Aún no hay destinos extremos (0–10% o 90–100%).
-                    </p>
-                  </GlassCard>
-                ) : (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {matches.map((match) => (
-                      <GlassCard key={match.id} className="flex flex-col gap-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-xs tracking-wide text-cyan-200/70 uppercase">
-                              {formatDate(match.createdAt)}
-                            </p>
-                            <h3 className="font-display text-2xl text-cyan-50">
-                              {match.leftName} + {match.rightName}
-                            </h3>
-                            <p className="text-sm text-pink-100/90">{match.percent}%</p>
-                          </div>
-                          <button
-                            type="button"
-                            className="text-xs text-rose-200/80 hover:text-rose-100"
-                            onClick={() => removeMatch(match.id)}
-                            disabled={busy}
-                          >
-                            Eliminar
-                          </button>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          {match.leftImage ? (
-                            <img
-                              src={match.leftImage}
-                              alt={match.leftName}
-                              className="h-12 w-12 rounded-full object-cover"
-                            />
-                          ) : null}
-                          {match.rightImage ? (
-                            <img
-                              src={match.rightImage}
-                              alt={match.rightName}
-                              className="h-12 w-12 rounded-full object-cover"
-                            />
-                          ) : null}
-                        </div>
-                        {match.phrase ? (
-                          <p className="text-sm text-sky-50/90">{match.phrase}</p>
-                        ) : null}
-                      </GlassCard>
-                    ))}
-                  </div>
-                )}
-              </>
-            ) : (
-              activities.map((activity) => (
-                <GlassCard
-                  key={activity.id}
-                  className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <h2 className="font-display text-2xl text-cyan-50">{activity.title}</h2>
-                    <p className="text-sm text-sky-100/75">{activity.description}</p>
-                    <p className="mt-1 text-xs text-cyan-200/70">{activity.path}</p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-3">
-                    <button
-                      type="button"
-                      className="rounded-full border border-cyan-100/25 bg-white/10 px-4 py-2 text-sm font-semibold text-cyan-50 hover:bg-white/15"
-                      onClick={() => setManaging(activity.id)}
-                    >
-                      Administrar
-                    </button>
-                    <button
-                      type="button"
-                      className="activity-toggle"
-                      data-on={activity.enabled ? 'true' : 'false'}
-                      onClick={() => toggleActivity(activity.id, !activity.enabled)}
-                      disabled={busy}
-                      aria-pressed={activity.enabled}
-                      aria-label={`Alternar ${activity.title}`}
-                    >
-                      <span />
-                    </button>
-                  </div>
-                </GlassCard>
-              ))
-            )}
-          </motion.section>
-        ) : (
-          <motion.section
-            key="members"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-          >
-            <GlassCard className="mb-4">
-              <form className="flex flex-col gap-3 sm:flex-row" onSubmit={addMember}>
+    <>
+      <NightSky />
+      <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-lg items-center px-4 py-16">
+        <div className="paper w-full rounded-3xl px-6 py-8 sm:px-8">
+          {!unlocked ? (
+            <>
+              <p className="text-xs font-semibold tracking-[0.28em] text-rose-800/70 uppercase">
+                Solo tú
+              </p>
+              <h1 className="font-display mt-2 text-4xl text-rose-950">Llave de la carta</h1>
+              <p className="mt-2 text-sm text-rose-900/70">
+                Desde aquí puedes encender o pausar el regalo de Abril.
+              </p>
+              <form className="mt-6 space-y-4" onSubmit={handleUnlock}>
                 <input
-                  className="glass-input"
-                  placeholder="Nombre del integrante"
-                  value={newMember}
-                  onChange={(event) => setNewMember(event.target.value)}
-                  disabled={busy}
+                  type="password"
+                  className="gift-input"
+                  placeholder="Contraseña"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
                 />
-                <button
-                  type="submit"
-                  className="rounded-2xl bg-gradient-to-r from-blue-800 to-cyan-500 px-5 py-3 font-semibold whitespace-nowrap text-white"
-                  disabled={busy}
-                >
-                  Agregar
+                {authError ? <p className="text-sm text-rose-700">{authError}</p> : null}
+                <button type="submit" className="gift-button">
+                  Entrar
                 </button>
               </form>
+            </>
+          ) : (
+            <>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold tracking-[0.28em] text-rose-800/70 uppercase">
+                    Control
+                  </p>
+                  <h1 className="font-display mt-1 text-3xl text-rose-950">Regalo de Abril</h1>
+                </div>
+                <button
+                  type="button"
+                  className="text-sm text-rose-800/70 underline-offset-4 hover:underline"
+                  onClick={handleLogout}
+                >
+                  Salir
+                </button>
+              </div>
+
+              <p className="mt-4 text-sm text-rose-900/75">
+                {loading
+                  ? 'Leyendo el estado…'
+                  : enabled
+                    ? 'La carta está encendida. Abril verá el sobre al abrir el link.'
+                    : 'La carta está en pausa. Ella verá un aviso de “aún no es el momento”.'}
+              </p>
+
+              {!isFirebaseConfigured ? (
+                <p className="mt-3 rounded-2xl bg-amber-100/80 px-3 py-2 text-sm text-amber-950">
+                  Firebase no está configurado en este deploy. El regalo se muestra
+                  encendido por defecto.
+                </p>
+              ) : null}
+
               <button
                 type="button"
-                className="mt-4 text-sm text-cyan-200 underline-offset-4 hover:underline"
-                onClick={seedMembers}
-                disabled={busy}
+                className="gift-button mt-6"
+                onClick={toggleGift}
+                disabled={busy || loading}
               >
-                Sincronizar lista (19 únicos, sin duplicados)
+                {enabled ? 'Pausar la carta' : 'Encender la carta'}
               </button>
-            </GlassCard>
 
-            <div className="space-y-2">
-              {members.map((member) => (
-                <div key={member.id} className="glass rounded-2xl px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <span className="avatar-ring h-11 w-11 overflow-hidden rounded-full">
-                        {member.image ? (
-                          <img
-                            src={member.image}
-                            alt={member.name}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <span className="flex h-full w-full items-center justify-center bg-cyan-900/50 text-sm">
-                            {member.name.slice(0, 1)}
-                          </span>
-                        )}
-                      </span>
-                      <span className="truncate font-medium text-cyan-50">{member.name}</span>
-                    </div>
-                    <div className="flex shrink-0 gap-2">
-                      <button
-                        type="button"
-                        className="rounded-full bg-cyan-300/15 px-3 py-1 text-sm text-cyan-50 hover:bg-cyan-300/25"
-                        onClick={() => startEdit(member)}
-                        disabled={busy}
-                      >
-                        Editar
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-full bg-rose-400/15 px-3 py-1 text-sm text-rose-100 hover:bg-rose-400/25"
-                        onClick={() => removeMember(member.id)}
-                        disabled={busy}
-                      >
-                        Eliminar
-                      </button>
-                    </div>
-                  </div>
+              {notice ? <p className="mt-3 text-sm text-rose-800/80">{notice}</p> : null}
 
-                  {editing?.id === member.id ? (
-                    <form className="mt-3 grid gap-3 sm:grid-cols-[1fr_auto]" onSubmit={saveEdit}>
-                      <input
-                        className="glass-input"
-                        value={editName}
-                        onChange={(event) => setEditName(event.target.value)}
-                        disabled={busy}
-                      />
-                      <div className="flex flex-wrap gap-2">
-                        <label className="rounded-full bg-white/10 px-3 py-2 text-sm text-cyan-50">
-                          Nueva foto
-                          <input
-                            type="file"
-                            accept="image/png,image/jpeg,image/webp,image/gif"
-                            className="sr-only"
-                            onChange={(event) => setEditFile(event.target.files?.[0] ?? null)}
-                          />
-                        </label>
-                        <button
-                          type="submit"
-                          className="rounded-full bg-gradient-to-r from-blue-700 to-cyan-400 px-4 py-2 text-sm font-semibold text-slate-950"
-                          disabled={busy}
-                        >
-                          Guardar
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded-full px-3 py-2 text-sm text-cyan-100/80"
-                          onClick={() => setEditing(null)}
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                      {editFile ? (
-                        <p className="text-xs text-cyan-100/70 sm:col-span-2">
-                          Foto lista: {editFile.name}
-                        </p>
-                      ) : null}
-                    </form>
-                  ) : null}
-                </div>
-              ))}
-            </div>
-          </motion.section>
-        )}
-      </AnimatePresence>
-    </div>
+              <div className="mt-8 space-y-2 text-sm text-rose-900/70">
+                <p>
+                  Para cambiar el texto: edita src/constants/letter.js y haz git
+                  push.
+                </p>
+                <p>
+                  Para publicar cambios: git add, git commit y git push a main.
+                  Vercel actualiza el link solo.
+                </p>
+              </div>
+
+              <Link
+                to="/"
+                className="mt-6 inline-block text-sm text-rose-800 underline-offset-4 hover:underline"
+              >
+                Ver lo que verá Abril
+              </Link>
+            </>
+          )}
+        </div>
+      </div>
+    </>
   )
 }

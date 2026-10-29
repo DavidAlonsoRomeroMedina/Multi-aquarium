@@ -1,5 +1,4 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
 
 function readEnv(...keys) {
@@ -33,24 +32,6 @@ export const isFirebaseConfigured = Boolean(
     firebaseEnvStatus.hasAppId,
 )
 
-export function getFirebaseConfigError() {
-  if (isFirebaseConfigured) return ''
-
-  const missing = []
-  if (!firebaseEnvStatus.hasWebKey) {
-    missing.push('VITE_FIREBASE_WEB_KEY')
-  }
-  if (!firebaseEnvStatus.hasProjectId) {
-    missing.push('VITE_FIREBASE_PROJECT_ID')
-  }
-  if (!firebaseEnvStatus.hasAppId) {
-    missing.push('VITE_FIREBASE_APP_ID')
-  }
-
-  return `Firebase no está configurado en este deploy. Faltan: ${missing.join(', ')}. En Vercel deben estar en Production y hay que Redeploy (sin caché).`
-}
-
 const app = isFirebaseConfigured ? initializeApp(firebaseConfig) : null
 
 export const db = app ? getFirestore(app) : null
-export const auth = app ? getAuth(app) : null
