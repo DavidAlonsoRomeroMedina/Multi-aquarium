@@ -11,6 +11,6 @@ export const LETTER = {
     'No tengo suficientes flores para lo que siento, así que te dejo estas palabras. Guárdalas. Cuando dudes, cuando el día pese, cuando necesites un recordatorio: te elijo, te admiro y te amo. Hoy, mañana y en todos los abriles que nos queden.',
   ],
   closing: 'Con todo lo que soy, y con todo lo que te quiero,',
-  signature: 'David',
+  signature: 'Adrien',
   postscript: 'P.D. Si esta carta pudiera abrazarte, ya lo estaría haciendo.',
 }
